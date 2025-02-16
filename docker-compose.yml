@@ -1,0 +1,13 @@
+services:
+  app:
+    image: registry.cn-hangzhou.aliyuncs.com/orangbus/m3u8-downloader
+    container_name: m3u8-downloader
+    privileged: true
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./.env:/www/.env
+      - ./${DB_DATABASE}:/www/sqlite
+      - ${DOWNLOAD_DATA}:/www/download
+
