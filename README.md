@@ -1,4 +1,4 @@
-# 仿YouTube在线影视
+# 仿YouTube在线聚合影视
 > 前提条件，已经安装了docker以及docker-compose
 
 ## 如何使用
@@ -17,4 +17,10 @@ docker-compose up -d
 效果图
 ![image](./app.png)
 
+## 3、文档地址
 
+[https://v.orangbus.cn](https://v.orangbus.cn)
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=orangbus/go-movie&type=date&legend=top-left)](https://www.star-history.com/#orangbus/go-movie&type=date&legend=top-left)

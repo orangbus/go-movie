@@ -8,6 +8,5 @@ services:
       - "3000:3000"
     volumes:
       - ./.env:/www/.env
-      - ./${DB_DATABASE}:/www/sqlite
-      - ${DOWNLOAD_DATA}:/www/download
-
+      - ./db.sqlite:/www/db.sqlite
+      - ./download:/www/download
