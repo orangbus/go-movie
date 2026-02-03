@@ -7,9 +7,15 @@
 ```
 git clone https://github.com/orangbus/go-movie.git
 ```
-
+如果需要支持全文检索，请使用 `docker-compose-scout.yml` 配置文件,执行下面命令
+```bash
+cd go-movie
+cat docker-compose-scout.yml > docker-compose.yml && mkdir data
+```
+Tip: 在`go-movie`目录下,将`docker-compose-scout.yml`内容复制到`docker-compose.yml` 中，并且创建一个`data`的空目录
 ## 2、运行
 ```bash
+cd go-movie
 docker-compose up -d
 ```
 访问：http://ip:3000

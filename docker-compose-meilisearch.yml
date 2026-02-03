@@ -1,0 +1,32 @@
+services:
+  app:
+    image: registry.cn-hangzhou.aliyuncs.com/orangbus/m3u8-downloader:latest
+    container_name: m3u8-downloader
+    privileged: true
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./.env:/www/.env
+      - ./db.sqlite:/www/db.sqlite
+      - ./download:/www/download
+    networks:
+      - scout-network
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    container_name: meilisearch
+    restart: always
+    ports:
+      - 7700:7700
+    environment:
+      - MEILI_MASTER_KEY=admin666 # 建议设置复杂一点
+      - MEILI_ENV=production
+      - MEILI_HTTP_ADDR=0.0.0.0:7700  # 监听所有地址
+      - MEILI_NO_ANALYTICS=true  # 关闭数据分析（可选）
+    volumes:
+      - ./data:/meili_data
+    networks:
+      - scout-network
+networks:
+  scout-network:
+    driver: bridge
