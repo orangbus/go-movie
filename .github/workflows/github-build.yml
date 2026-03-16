@@ -1,0 +1,142 @@
+name: 多平台编译打包并发布
+
+on:
+  workflow_dispatch: # 手动触发
+  push:
+    tags:
+      - 'v*'  # 打Tag自动触发（如v1.0.0）
+
+jobs:
+  build-multi-platform:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 发布Releases权限
+      packages: read   # 拉取依赖权限
+
+    # 多平台矩阵：覆盖你需要的所有格式
+    strategy:
+      fail-fast: false  # 一个平台失败不影响其他平台
+      matrix:
+        include:
+          # Windows amd64 (你的基础打包逻辑)
+          - os: windows
+            arch: amd64
+            goos: windows
+            goarch: amd64
+            ext: .exe
+            zipname: m3u8-downloader-windows-amd64-${{github.ref_name }}.zip
+          # Linux amd64 (x86_64)
+          - os: linux
+            arch: amd64
+            goos: linux
+            goarch: amd64
+            ext: ""
+            zipname: m3u8-downloader-linux-amd64-${{github.ref_name }}.zip
+          # Linux x86 (386)
+          - os: linux
+            arch: x86
+            goos: linux
+            goarch: 386
+            ext: ""
+            zipname: m3u8-downloader-linux-x86-${{github.ref_name }}.zip
+          # Linux arm
+          - os: linux
+            arch: arm
+            goos: linux
+            goarch: arm
+            goarch_variant: 7  # 适配armv7（主流嵌入式设备）
+            ext: ""
+            zipname: m3u8-downloader-linux-arm-${{github.ref_name }}.zip
+           # macOS amd64 (Intel芯片)
+          - os: macos
+            arch: amd64
+            goos: darwin  # Go的macOS标识是darwin
+            goarch: amd64
+            ext: ""
+            zipname: m3u8-downloader-macos-amd64-${{github.ref_name }}.zip
+           # macOS arm64 (M1/M2/M3芯片)
+          - os: macos
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+            ext: ""
+            zipname: m3u8-downloader-macos-arm64-${{github.ref_name }}.zip
+
+    steps:
+      - name: 直接使用Token嵌入URL拉取私有仓库（核心修复）
+        env:
+          PAT: ${{ secrets.PULL_TOKEN }}
+          OWNER: ${{ secrets.PRIVATE_REPO_OWNER }}
+          REPO_NAME: ${{ secrets.PRIVATE_REPO_NAME }}
+          BRANCH: ${{ github.ref_name || 'master' }}
+        run: |
+          # 提前检查关键变量是否为空
+          if [ -z "$PAT" ]; then echo "❌ PAT变量为空，请检查Secrets配置"; exit 1; fi
+          if [ -z "$OWNER" ]; then echo "❌ OWNER变量为空，请检查Secrets配置"; exit 1; fi
+          if [ -z "$REPO_NAME" ]; then echo "❌ REPO_NAME变量为空，请检查Secrets配置"; exit 1; fi
+          # 方案1：直接在克隆URL中嵌入Token（最稳定的鉴权方式）
+          git clone https://$PAT@github.com/$OWNER/$REPO_NAME.git private-repo --depth=1
+          # 进入仓库目录，配置用户信息（避免后续操作警告）
+          cd private-repo
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          # 验证拉取结果
+          echo "✅ 私有仓库拉取成功，当前目录文件："
+          ls -la
+
+      - name: 设置Go环境
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.0'  # 替换为你的Go版本
+          cache-dependency-path: private-repo/go.sum
+
+      - name: 编译Go程序（跨平台）
+        run: |
+          cd private-repo
+          # 安装依赖
+          go mod tidy
+          # 设置跨平台编译环境变量
+          export GOOS=${{ matrix.goos }}
+          export GOARCH=${{ matrix.goarch }}
+          # ARM架构需指定变体
+          ${{ matrix.goarch_variant && format('export GOARM={0}', matrix.goarch_variant) || '' }}
+          # 编译（保持你的ldflags参数，静态编译）
+          go build --ldflags "-extldflags -static" -o main${{ matrix.ext }} .
+          # 验证编译产物
+          ls -la main${{ matrix.ext }}
+
+      - name: 打包产物（统一逻辑）
+        run: |
+          cd private-repo
+          # 创建临时目录，整理要打包的文件
+          mkdir -p m3u8-downloader m3u8-downloader/web
+          # 初始化表接口
+          go run . artisan migrate
+          # 复制编译后的主程序
+          cp main${{ matrix.ext }} m3u8-downloader/ 
+          # 复制指定目录/文件（保持你的目录结构）
+          cp -r storage m3u8-downloader/ || echo "storage目录不存在，跳过"
+          cp -r resources m3u8-downloader/ || echo "resources目录不存在，跳过"
+          cp .env m3u8-downloader/env || echo ".env文件不存在，跳过"
+          cp db.sqlite m3u8-downloader/db.sqlite || echo ".env文件不存在，跳过"
+          cp -r web/dist m3u8-downloader/web/ || echo "web/dist目录不存在，跳过"
+          echo "修改env为.env，window双击 main.exe 启动，其他平台类似" > m3u8-downloader/新手说明.txt
+          
+          # 压缩为zip（不同平台生成不同名称）
+          zip -r ../${{ matrix.zipname }} m3u8-downloader/*
+          # 回到根目录，验证压缩包
+          cd ..
+          ls -la ${{ matrix.zipname }}
+
+      - name: 发布到Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ matrix.zipname }}
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body_path: private-repo/release-notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 开源仓库默认Token
